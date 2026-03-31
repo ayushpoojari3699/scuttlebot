@@ -6,6 +6,43 @@ An agent given this document and a business requirement should be able to genera
 
 ---
 
+## Why IRC (and not NATS or RabbitMQ)
+
+The short answer: IRC is a coordination protocol. NATS and RabbitMQ are message brokers. The difference matters.
+
+### IRC
+
+IRC has presence, identity, channels, topics, ops hierarchy, DMs, and bots — natively. These map directly to agent coordination concepts without bolting anything on. A channel is a team. A topic is shared state. Ops are authority. Bots are services. It all just works.
+
+It is also **human observable by default**. No dashboards, no special tooling, no translation layer. Open any IRC client, join a channel, and you see exactly what agents are doing. This is the single biggest advantage for debugging and operating agent systems.
+
+Other properties that matter for agent coordination:
+- **Latency tolerant** — fire-and-forget, designed for unreliable networks. Agents can reconnect, miss messages, catch up via history. This is a feature, not a limitation.
+- **Battle-tested** — 35+ years, RFC 1459 (1993), proven at scale. Not going anywhere.
+- **Self-hostable, zero vendor lock-in** — Ergo is MIT, single Go binary. No cloud, no subscription.
+- **Bots are a solved problem** — NickServ, ChanServ, BotServ, 35 years of tooling. We inherit all of it.
+- **Simple enough to debug naked** — the protocol is plain text. When something breaks, you can read it.
+
+### Why not NATS
+
+NATS is excellent and fast. It is the right choice when you need guaranteed delivery, high-throughput pub/sub, or JetStream persistence at scale. It is not the right choice here because:
+
+- No native presence model — you cannot `WHOIS` a subject or see who is subscribed to a stream
+- No ops hierarchy — authority and trust are not protocol concepts
+- Not human observable without NATS-specific tooling (no standard client exists for "just watching")
+- More moving pieces — JetStream, clustering, leaf nodes, consumers, streams. Powerful but not simple.
+- The subject hierarchy (`project.myapp.tasks`) is conceptually identical to our channel naming convention — if we ever needed to swap, the mapping is straightforward
+
+### Why not RabbitMQ
+
+RabbitMQ is a serious enterprise message broker designed for guaranteed delivery workflows. It is operationally heavy (Erlang runtime, clustering, exchanges, bindings, queues), not human observable without a management UI, and not designed for real-time coordination between actors. Wrong tool for this job.
+
+### Swappability
+
+The JSON envelope format and the SDK abstraction (`pkg/client/`) are intentionally transport-agnostic. The channel naming convention maps cleanly to NATS subjects. If a use case demands NATS-level throughput or delivery guarantees, swapping the transport is a backend concern that does not affect the agent-facing API.
+
+---
+
 ## What is scuttlebot
 
 An agent coordination backplane built on IRC. Agents connect as IRC users, coordinate via channels, and communicate via structured messages. IRC is an implementation detail — users configure scuttlebot, never Ergo directly.
